@@ -552,9 +552,9 @@
     </div>
 
     <div class="rating-btns" id="ratingBtns">
-      <button class="rate-btn easy" onclick="rate('easy')">✓ Gewusst</button>
-      <button class="rate-btn again" onclick="rate('again')">↺ Nochmal</button>
-      <button class="rate-btn hard" onclick="rate('hard')">✗ Nicht gewusst</button>
+      <button class="rate-btn hard" onclick="rate('hard')">✗ Schlecht</button>
+      <button class="rate-btn again" onclick="rate('again')">↺ OK</button>
+      <button class="rate-btn easy" onclick="rate('easy')">✓ Gut</button>
     </div>
 
     <div class="card-controls" style="margin-top:1rem">
@@ -669,55 +669,61 @@ const quizQuestions = [
   {q:"Symmetrische vs. asymmetrische Verschlüsselung: Was ist der Hauptvorteil von asymmetrisch?", correct:3, opts:["Es ist schneller","Es braucht weniger Rechenleistung","Es ist einfacher zu implementieren","Kein riskanter Schlüsselaustausch nötig"]}
 ];
 
-// ── localStorage helpers ──────────────────────────────────────────
-const LS_KEY = 'modul231_v1';
+// ── SRS config ───────────────────────────────────────────────────
+// Level:  0=neu  1=schlecht  2=ok  3=gut  4=perfekt  5=gemeistert(2x perfekt)
+// nextIn: wie viele Karten bis zum Wiederholen
+const SRS_INTERVAL = {0:0, 1:5, 2:10, 3:25, 4:null}; // null = perfekt, wartet auf 2. Mal
+const LEVEL_LABEL  = ['Neu','Schlecht','OK','Gut','Perfekt','✓ Fertig'];
+const LEVEL_COLOR  = ['var(--text-dim)','var(--accent2)','var(--accent3)','#60a5fa','var(--accent)','var(--accent)'];
 
-function loadLS() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; }
-}
-
-function saveLS(data) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
-}
+// ── localStorage ─────────────────────────────────────────────────
+const LS_KEY = 'modul231_v2';
+function loadLS() { try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; } }
+function saveLS(d) { try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch {} }
 
 function getPersistedState() {
   const d = loadLS();
   return {
-    currentIdx:   d.currentIdx   ?? 0,
+    // srsData: { [question]: { level: 0-5, perfectCount: 0-2, dueIn: 0 } }
+    srsData:      d.srsData      ?? {},
     activeFilter: d.activeFilter ?? 'Alle',
-    cardRatings:  d.cardRatings  ?? {},   // {question: 'easy'|'hard'|'again'}
     quizHighscore:d.quizHighscore ?? null,
   };
 }
 
 function persistState() {
-  const d = loadLS();
-  d.currentIdx    = currentIdx;
-  d.activeFilter  = activeFilter;
-  d.cardRatings   = cardRatings;
-  d.quizHighscore = quizHighscore;
-  saveLS(d);
+  saveLS({ srsData, activeFilter, quizHighscore });
 }
 
 // ── State ─────────────────────────────────────────────────────────
-const ps = getPersistedState();
-let currentIdx    = ps.currentIdx;
-let activeFilter  = ps.activeFilter;
-let cardRatings   = ps.cardRatings;   // persistent per-card ratings
-let quizHighscore = ps.quizHighscore;
-let isFlipped     = false;
-let filteredCards = [];
+const ps       = getPersistedState();
+let srsData      = ps.srsData;
+let activeFilter = ps.activeFilter;
+let quizHighscore= ps.quizHighscore;
+let isFlipped    = false;
+let queue        = [];   // cards due now (ordered)
+let currentIdx   = 0;
 let quizIdx = 0, quizScore = 0, quizAnswered = false;
 
-// Derived stats from cardRatings
-function getStats() {
-  const vals = Object.values(cardRatings);
-  return {
-    seen:  vals.length,
-    easy:  vals.filter(v => v === 'easy').length,
-    again: vals.filter(v => v === 'again').length,
-    hard:  vals.filter(v => v === 'hard').length,
-  };
+function getCardData(q) {
+  if (!srsData[q]) srsData[q] = { level: 0, perfectCount: 0, dueIn: 0 };
+  return srsData[q];
+}
+
+function isDone(q) {
+  const d = getCardData(q);
+  return d.level === 5;
+}
+
+// Build queue: cards due now from filteredPool, then tick dueIn down
+function buildQueue() {
+  const pool = activeFilter === 'Alle' ? cards : cards.filter(c => c.tag === activeFilter);
+  // Separate: due now (dueIn<=0, not done) vs waiting
+  const due     = pool.filter(c => !isDone(c.q) && getCardData(c.q).dueIn <= 0);
+  const waiting = pool.filter(c => !isDone(c.q) && getCardData(c.q).dueIn > 0);
+  // shuffle due cards
+  queue = due.sort(() => Math.random() - 0.5);
+  currentIdx = 0;
 }
 
 function getFilteredCards() {
@@ -729,103 +735,188 @@ function renderFilters() {
   const tags = ['Alle', 'W1', 'W2', 'W4'];
   const wrap = document.getElementById('filterChips');
   wrap.innerHTML = tags.map(t => {
-    const count = t === 'Alle' ? cards.length : cards.filter(c => c.tag === t).length;
-    // count how many rated in this filter
-    const ratedInFilter = t === 'Alle'
-      ? Object.keys(cardRatings).length
-      : cards.filter(c => c.tag === t && cardRatings[c.q]).length;
-    const pct = Math.round((ratedInFilter / count) * 100);
+    const pool  = t === 'Alle' ? cards : cards.filter(c => c.tag === t);
+    const done  = pool.filter(c => isDone(c.q)).length;
+    const pct   = Math.round((done / pool.length) * 100);
     return `<button class="chip ${activeFilter===t?'active':''}" onclick="setFilter('${t}')">${t === 'Alle' ? 'Alle' : t} <span style="opacity:.55">${pct}%</span></button>`;
   }).join('');
 }
 
 function setFilter(tag) {
   activeFilter = tag;
-  filteredCards = getFilteredCards();
-  currentIdx = 0;
-  isFlipped = false;
   persistState();
+  buildQueue();
   renderFilters();
   renderCard();
   updateProgress();
+  updateStats();
 }
 
-function getRatingDot(q) {
-  const r = cardRatings[q];
-  if (!r) return '';
-  const colors = {easy:'var(--accent)', hard:'var(--accent2)', again:'var(--accent3)'};
-  return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${colors[r]};margin-left:6px;vertical-align:middle"></span>`;
+function getLevelBadge(q) {
+  const d = getCardData(q);
+  const lvl = d.level;
+  return `<span style="font-size:0.6rem;font-family:var(--mono);padding:0.15rem 0.4rem;border-radius:3px;background:${LEVEL_COLOR[lvl]}22;color:${LEVEL_COLOR[lvl]};border:1px solid ${LEVEL_COLOR[lvl]}44;margin-left:8px;vertical-align:middle">${LEVEL_LABEL[lvl]}</span>`;
 }
 
 function renderCard() {
-  const card = filteredCards[currentIdx];
-  if (!card) return;
-  document.getElementById('cardQuestion').innerHTML = card.q + getRatingDot(card.q);
+  // Check if queue empty
+  const pool = activeFilter === 'Alle' ? cards : cards.filter(c => c.tag === activeFilter);
+  const allDone = pool.every(c => isDone(c.q));
+  const noDue   = queue.length === 0 || currentIdx >= queue.length;
+
+  if (allDone) {
+    document.getElementById('cardQuestion').innerHTML = '🎉 Alle Karten gemeistert!';
+    document.getElementById('cardAnswer').innerHTML = 'Perfekt — du kennst alle Karten in diesem Set.';
+    document.getElementById('cardTag').textContent = '✓';
+    document.getElementById('cardTagBack').textContent = '✓';
+    document.getElementById('cardCounter').textContent = 'Fertig!';
+    document.getElementById('flashcard').classList.remove('flipped');
+    isFlipped = false;
+    hideRatingBtns();
+    return;
+  }
+
+  if (noDue) {
+    // Show waiting info
+    const waiting = pool.filter(c => !isDone(c.q) && getCardData(c.q).dueIn > 0);
+    const minDue  = Math.min(...waiting.map(c => getCardData(c.q).dueIn));
+    document.getElementById('cardQuestion').innerHTML = `⏳ ${waiting.length} Karten warten`;
+    document.getElementById('cardAnswer').innerHTML   = `Die nächste Karte ist in <b>${minDue}</b> Karten fällig.<br><br>Klicke auf <b>Shuffle</b> um den Deck neu zu starten, oder lerne weiter mit einer anderen Woche.`;
+    document.getElementById('cardTag').textContent = '…';
+    document.getElementById('cardTagBack').textContent = '…';
+    document.getElementById('cardCounter').textContent = `0 fällig / ${waiting.length} wartend`;
+    document.getElementById('flashcard').classList.remove('flipped');
+    isFlipped = false;
+    hideRatingBtns();
+    return;
+  }
+
+  const card = queue[currentIdx];
+  document.getElementById('cardQuestion').innerHTML = card.q + getLevelBadge(card.q);
   document.getElementById('cardAnswer').innerHTML = card.a;
   document.getElementById('cardTag').textContent = card.tag;
   document.getElementById('cardTagBack').textContent = card.tag;
-  document.getElementById('cardCounter').textContent = `Karte ${currentIdx + 1} von ${filteredCards.length}`;
+  document.getElementById('cardCounter').textContent = `${currentIdx + 1} von ${queue.length} fällig`;
   document.getElementById('flashcard').classList.remove('flipped');
   isFlipped = false;
   hideRatingBtns();
 }
 
 function flipCard() {
+  const pool = activeFilter === 'Alle' ? cards : cards.filter(c => c.tag === activeFilter);
+  if (pool.every(c => isDone(c.q))) return;
+  if (queue.length === 0 || currentIdx >= queue.length) return;
   isFlipped = !isFlipped;
   document.getElementById('flashcard').classList.toggle('flipped', isFlipped);
   if (isFlipped) showRatingBtns();
   else hideRatingBtns();
-  updateStats();
 }
 
 function showRatingBtns() {
   document.querySelectorAll('.rate-btn').forEach(b => b.classList.add('visible'));
 }
-
 function hideRatingBtns() {
   document.querySelectorAll('.rate-btn').forEach(b => b.classList.remove('visible'));
 }
 
+// Rate: schlecht=hard, nochmal=again, gut=easy  →  map to SRS levels
 function rate(type) {
-  const q = filteredCards[currentIdx].q;
-  cardRatings[q] = type;
+  if (currentIdx >= queue.length) return;
+  const card = queue[currentIdx];
+  const d    = getCardData(card.q);
+
+  if (type === 'hard') {
+    // schlecht: zurück auf Level 1, dueIn=5
+    d.level        = 1;
+    d.perfectCount = 0;
+    d.dueIn        = SRS_INTERVAL[1];
+  } else if (type === 'again') {
+    // nochmal: level up max to 3 (gut), interval accordingly
+    const newLevel = Math.min(d.level + 1, 3);
+    d.level        = newLevel;
+    d.perfectCount = 0;
+    d.dueIn        = SRS_INTERVAL[newLevel];
+  } else {
+    // gewusst: level up
+    const newLevel = Math.min(d.level + 1, 4);
+    d.level        = newLevel;
+    if (newLevel === 4) {
+      d.perfectCount = (d.perfectCount || 0) + 1;
+      if (d.perfectCount >= 2) {
+        d.level = 5; // gemeistert
+        d.dueIn = 0;
+      } else {
+        d.dueIn = 0; // comes back next round
+      }
+    } else {
+      d.dueIn = SRS_INTERVAL[newLevel];
+    }
+  }
+
+  // Tick dueIn down for all other cards in pool
+  const pool = activeFilter === 'Alle' ? cards : cards.filter(c => c.tag === activeFilter);
+  pool.forEach(c => {
+    if (c.q !== card.q) {
+      const cd = getCardData(c.q);
+      if (cd.dueIn > 0) cd.dueIn--;
+    }
+  });
+
   persistState();
+
+  // Remove rated card from queue
+  queue.splice(currentIdx, 1);
+
+  // If card needs to come back this round (perfectCount=1, level=4), re-add to end
+  if (d.level === 4 && d.perfectCount === 1) {
+    queue.push(card);
+  }
+
+  if (currentIdx >= queue.length) currentIdx = Math.max(0, queue.length - 1);
+
+  renderCard();
+  updateProgress();
   updateStats();
-  renderCard(); // refresh dot
-  nextCard();
+  renderFilters();
 }
 
 function nextCard() {
-  if (currentIdx < filteredCards.length - 1) {
-    currentIdx++;
-    persistState();
-    renderCard();
-    updateProgress();
-  }
+  if (queue.length === 0) return;
+  currentIdx = (currentIdx + 1) % Math.max(queue.length, 1);
+  document.getElementById('flashcard').classList.remove('flipped');
+  isFlipped = false;
+  hideRatingBtns();
+  renderCard();
+  updateProgress();
 }
 
 function prevCard() {
-  if (currentIdx > 0) {
-    currentIdx--;
-    persistState();
-    renderCard();
-    updateProgress();
-  }
+  if (queue.length === 0) return;
+  currentIdx = (currentIdx - 1 + queue.length) % queue.length;
+  document.getElementById('flashcard').classList.remove('flipped');
+  isFlipped = false;
+  hideRatingBtns();
+  renderCard();
+  updateProgress();
 }
 
 function shuffleCards() {
-  filteredCards = filteredCards.sort(() => Math.random() - 0.5);
-  currentIdx = 0;
+  // Reset dueIn for all cards in pool so everything is due again
+  const pool = activeFilter === 'Alle' ? cards : cards.filter(c => c.tag === activeFilter);
+  pool.forEach(c => { const d = getCardData(c.q); if (!isDone(c.q)) d.dueIn = 0; });
   persistState();
+  buildQueue();
   renderCard();
+  updateProgress();
+  updateStats();
 }
 
 function resetProgress() {
   if (!confirm('Fortschritt wirklich zurücksetzen?')) return;
-  cardRatings = {};
-  currentIdx = 0;
+  srsData = {};
   quizHighscore = null;
   persistState();
+  buildQueue();
   renderFilters();
   renderCard();
   updateProgress();
@@ -833,21 +924,22 @@ function resetProgress() {
 }
 
 function updateProgress() {
-  const pct = ((currentIdx + 1) / filteredCards.length) * 100;
+  const pool  = activeFilter === 'Alle' ? cards : cards.filter(c => c.tag === activeFilter);
+  const done  = pool.filter(c => isDone(c.q)).length;
+  const pct   = (done / pool.length) * 100;
   document.getElementById('progressFill').style.width = pct + '%';
-  document.getElementById('progressLabel').textContent = `${currentIdx + 1} / ${filteredCards.length}`;
+  document.getElementById('progressLabel').textContent = `${done} / ${pool.length} gemeistert`;
 }
 
 function updateStats() {
-  const s = getStats();
-  const total = filteredCards.length;
-  const seenInFilter = filteredCards.filter(c => cardRatings[c.q]).length;
-  document.getElementById('statSeen').textContent = s.seen;
-  document.getElementById('statEasy').textContent = s.easy;
-  document.getElementById('statAgain').textContent = s.again;
-  document.getElementById('statHard').textContent = s.hard;
-  document.getElementById('statLeft').textContent = total - seenInFilter;
-  // highscore
+  const pool   = activeFilter === 'Alle' ? cards : cards.filter(c => c.tag === activeFilter);
+  const counts = [0,0,0,0,0,0];
+  pool.forEach(c => counts[getCardData(c.q).level]++);
+  document.getElementById('statSeen').textContent  = pool.filter(c => getCardData(c.q).level > 0).length;
+  document.getElementById('statEasy').textContent  = counts[4] + counts[5]; // perfekt+fertig
+  document.getElementById('statAgain').textContent = counts[2] + counts[3]; // ok+gut
+  document.getElementById('statHard').textContent  = counts[1];             // schlecht
+  document.getElementById('statLeft').textContent  = queue.length - currentIdx;
   const hs = document.getElementById('statHighscore');
   if (hs) hs.textContent = quizHighscore !== null ? quizHighscore + '/10' : '—';
 }
@@ -1076,9 +1168,7 @@ document.addEventListener('keydown', e => {
 });
 
 // Init
-filteredCards = getFilteredCards();
-// clamp currentIdx in case card count changed
-if (currentIdx >= filteredCards.length) currentIdx = 0;
+buildQueue();
 renderFilters();
 renderCard();
 updateProgress();
