@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modul 231 — Lernapp</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f12;
+    --surface: #161a1f;
+    --surface2: #1e242b;
+    --border: #2a3140;
+    --accent: #00d4aa;
+    --accent2: #ff6b6b;
+    --accent3: #ffd166;
+    --text: #e8edf2;
+    --text-muted: #6b7a8d;
+    --text-dim: #3d4f61;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .logo span { color: var(--text-muted); }
+
+  .progress-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .progress-track {
+    width: 160px;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  .progress-label {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 2rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 0.6rem 1rem;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 5px;
+    transition: all 0.2s;
+  }
+
+  .tab.active {
+    background: var(--accent);
+    color: #000;
+    font-weight: 600;
+  }
+
+  .tab:not(.active):hover { background: var(--surface2); color: var(--text); }
+
+  /* Filter chips */
+  .filters {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .chip {
+    padding: 0.3rem 0.75rem;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 20px;
+    transition: all 0.2s;
+  }
+
+  .chip.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,170,0.07); }
+  .chip:hover:not(.active) { border-color: var(--text-dim); color: var(--text); }
+
+  /* === FLASHCARD MODE === */
+  #flashcard-view { display: block; }
+  #cheatsheet-view { display: none; }
+  #quiz-view { display: none; }
+
+  .card-counter {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+
+  .flashcard-wrap {
+    perspective: 1200px;
+    cursor: pointer;
+    margin-bottom: 1.5rem;
+  }
+
+  .flashcard {
+    position: relative;
+    width: 100%;
+    min-height: 280px;
+    transform-style: preserve-3d;
+    transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .flashcard.flipped { transform: rotateY(180deg); }
+
+  .card-face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem;
+    text-align: center;
+  }
+
+  .card-back { transform: rotateY(180deg); background: var(--surface2); }
+
+  .card-tag {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+
+  .card-hint {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--text-dim);
+  }
+
+  .card-face h2 {
+    font-size: 1.15rem;
+    font-weight: 500;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .card-back .answer {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--text);
+    text-align: left;
+    max-width: 100%;
+  }
+
+  .card-back .answer b { color: var(--accent); font-weight: 600; }
+  .card-back .answer i { color: var(--text-muted); font-style: italic; }
+
+  /* Card controls */
+  .card-controls {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-bottom: 2rem;
+  }
+
+  .btn {
+    padding: 0.65rem 1.5rem;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+  }
+
+  .btn:hover { border-color: var(--text-muted); color: var(--text); }
+  .btn.prev:hover { border-color: var(--accent3); color: var(--accent3); }
+  .btn.next { border-color: var(--accent); color: var(--accent); background: rgba(0,212,170,0.07); }
+  .btn.next:hover { background: var(--accent); color: #000; }
+  .btn.shuffle:hover { border-color: #a78bfa; color: #a78bfa; }
+
+  .rating-btns {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 0.5rem;
+  }
+
+  .rate-btn {
+    padding: 0.4rem 1.2rem;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    border: 1px solid;
+    background: none;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition: all 0.25s;
+  }
+
+  .rate-btn.visible {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateY(0);
+  }
+
+  .rate-btn.easy { border-color: var(--accent); color: var(--accent); }
+  .rate-btn.easy:hover { background: rgba(0,212,170,0.15); }
+  .rate-btn.hard { border-color: var(--accent2); color: var(--accent2); }
+  .rate-btn.hard:hover { background: rgba(255,107,107,0.15); }
+  .rate-btn.again { border-color: var(--accent3); color: var(--accent3); }
+  .rate-btn.again:hover { background: rgba(255,209,102,0.15); }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    gap: 1.5rem;
+    padding: 1rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 1rem;
+  }
+
+  .stat { display: flex; flex-direction: column; gap: 2px; }
+  .stat-label { font-family: var(--mono); font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.12em; }
+  .stat-val { font-family: var(--mono); font-size: 1.1rem; font-weight: 600; }
+  .stat-val.green { color: var(--accent); }
+  .stat-val.red { color: var(--accent2); }
+  .stat-val.yellow { color: var(--accent3); }
+
+  /* === CHEAT SHEET === */
+  .cheatsheet { display: flex; flex-direction: column; gap: 1.5rem; }
+
+  .cs-section {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .cs-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: var(--surface);
+    cursor: pointer;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+  }
+
+  .cs-header:hover { background: var(--surface2); }
+  .cs-section.open .cs-header { border-bottom-color: var(--border); }
+
+  .cs-week {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid rgba(0,212,170,0.3);
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+
+  .cs-title { font-size: 0.95rem; font-weight: 500; flex: 1; }
+
+  .cs-chevron {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    transition: transform 0.25s;
+  }
+
+  .cs-section.open .cs-chevron { transform: rotate(180deg); }
+
+  .cs-body {
+    display: none;
+    padding: 1.25rem;
+    background: var(--surface);
+  }
+
+  .cs-section.open .cs-body { display: block; }
+
+  .cs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    margin-top: 0.75rem;
+  }
+
+  .cs-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+  }
+
+  .cs-card h4 {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.6rem;
+  }
+
+  .cs-card p, .cs-card li {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    line-height: 1.65;
+  }
+
+  .cs-card ul { padding-left: 1rem; }
+  .cs-card li { margin-bottom: 0.25rem; }
+  .cs-card strong { color: var(--text); }
+
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-right: 0.3rem;
+  }
+
+  .badge-green { background: rgba(0,212,170,0.12); color: var(--accent); border: 1px solid rgba(0,212,170,0.25); }
+  .badge-red { background: rgba(255,107,107,0.12); color: var(--accent2); border: 1px solid rgba(255,107,107,0.25); }
+  .badge-yellow { background: rgba(255,209,102,0.12); color: var(--accent3); border: 1px solid rgba(255,209,102,0.25); }
+
+  .warn-box {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    background: rgba(255,209,102,0.06);
+    border: 1px solid rgba(255,209,102,0.2);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-top: 0.75rem;
+    font-size: 0.82rem;
+    color: var(--accent3);
+    line-height: 1.55;
+  }
+
+  /* === QUIZ MODE === */
+  .quiz-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .quiz-q {
+    font-size: 1.05rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+  }
+
+  .quiz-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .quiz-opt {
+    padding: 0.75rem 1.1rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    text-align: left;
+    transition: all 0.2s;
+    font-family: var(--sans);
+  }
+
+  .quiz-opt:hover:not(.disabled) { border-color: var(--accent); color: var(--text); background: rgba(0,212,170,0.05); }
+  .quiz-opt.correct { border-color: var(--accent); background: rgba(0,212,170,0.1); color: var(--accent); }
+  .quiz-opt.wrong { border-color: var(--accent2); background: rgba(255,107,107,0.1); color: var(--accent2); }
+  .quiz-opt.disabled { cursor: default; }
+
+  .quiz-feedback {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    display: none;
+  }
+
+  .quiz-feedback.show { display: block; }
+  .quiz-feedback.ok { background: rgba(0,212,170,0.08); border: 1px solid rgba(0,212,170,0.2); color: var(--accent); }
+  .quiz-feedback.fail { background: rgba(255,107,107,0.08); border: 1px solid rgba(255,107,107,0.2); color: var(--accent2); }
+
+  .quiz-score {
+    text-align: center;
+    padding: 3rem 2rem;
+    display: none;
+  }
+
+  .quiz-score.show { display: block; }
+  .score-num { font-family: var(--mono); font-size: 4rem; font-weight: 600; color: var(--accent); }
+  .score-label { font-size: 0.9rem; color: var(--text-muted); margin-top: 0.5rem; }
+
+  @media (max-width: 600px) {
+    .card-controls { flex-wrap: wrap; }
+    .stats-bar { flex-wrap: wrap; gap: 1rem; }
+    .progress-track { width: 100px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="logo">Modul<span>_</span>231 <span>// Datenschutz & Sicherheit</span></div>
+    <div class="progress-bar">
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <div class="progress-label" id="progressLabel">0 / 54</div>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('flashcard')">⬛ Flashcards</button>
+    <button class="tab" onclick="switchTab('quiz')">◈ Quiz</button>
+    <button class="tab" onclick="switchTab('cheatsheet')">≡ Cheat Sheet</button>
+  </div>
+
+  <!-- FLASHCARD VIEW -->
+  <div id="flashcard-view">
+    <div class="filters" id="filterChips"></div>
+
+    <div class="card-counter" id="cardCounter">Karte 1 von 54</div>
+
+    <div class="flashcard-wrap" onclick="flipCard()">
+      <div class="flashcard" id="flashcard">
+        <div class="card-face card-front">
+          <div class="card-tag" id="cardTag">W1</div>
+          <h2 id="cardQuestion">Lade...</h2>
+          <div class="card-hint">klicken zum umdrehen</div>
+        </div>
+        <div class="card-face card-back">
+          <div class="card-tag" id="cardTagBack">W1</div>
+          <div class="answer" id="cardAnswer"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rating-btns" id="ratingBtns">
+      <button class="rate-btn easy" onclick="rate('easy')">✓ Gewusst</button>
+      <button class="rate-btn again" onclick="rate('again')">↺ Nochmal</button>
+      <button class="rate-btn hard" onclick="rate('hard')">✗ Nicht gewusst</button>
+    </div>
+
+    <div class="card-controls" style="margin-top:1rem">
+      <button class="btn prev" onclick="prevCard()">← Zurück</button>
+      <button class="btn shuffle" onclick="shuffleCards()">⇌ Mischen</button>
+      <button class="btn next" onclick="nextCard()">Weiter →</button>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-label">Gesehen</div><div class="stat-val" id="statSeen">0</div></div>
+      <div class="stat"><div class="stat-label">Gewusst</div><div class="stat-val green" id="statEasy">0</div></div>
+      <div class="stat"><div class="stat-label">Nochmal</div><div class="stat-val yellow" id="statAgain">0</div></div>
+      <div class="stat"><div class="stat-label">Nicht gew.</div><div class="stat-val red" id="statHard">0</div></div>
+      <div class="stat"><div class="stat-label">Verbleibend</div><div class="stat-val" id="statLeft">56</div></div>
+      <div class="stat"><div class="stat-label">Quiz-Best</div><div class="stat-val yellow" id="statHighscore">—</div></div>
+      <div class="stat" style="margin-left:auto"><button class="btn" onclick="resetProgress()" style="font-size:0.6rem;padding:0.3rem 0.7rem;opacity:0.5">↺ Reset</button></div>
+    </div>
+  </div>
+
+  <!-- QUIZ VIEW -->
+  <div id="quiz-view">
+    <div id="quizContent"></div>
+    <div class="quiz-score" id="quizScore">
+      <div class="score-num" id="scoreNum">-</div>
+      <div class="score-label" id="scoreLabel"></div>
+      <br><br>
+      <button class="btn next" onclick="startQuiz()" style="margin:auto">↺ Nochmal</button>
+    </div>
+  </div>
+
+  <!-- CHEAT SHEET VIEW -->
+  <div id="cheatsheet-view">
+    <div class="cheatsheet" id="cheatsheetContent"></div>
+  </div>
+
+</div>
+
+<script>
+const cards = [
+  // W1
+  {q:"Was schützt der Datenschutz primär?", a:"Die <b>Persönlichkeit von Menschen</b>.<br><i>Leitfrage: \"Darf ich diese Daten rechtlich bearbeiten?\"</i>", tag:"W1"},
+  {q:"Was schützt die Datensicherheit primär?", a:"Die <b>Daten (technisch)</b> vor Verlust oder Zugriff.<br><i>Leitfrage: \"Sind die Daten technisch sicher?\"</i>", tag:"W1"},
+  {q:"Welches Gesetz ist die Basis für den Datenschutz?", a:"Das <b>DSG</b> (Datenschutzgesetz).", tag:"W1"},
+  {q:"Welches Modell ist die Basis für die Datensicherheit?", a:"Die <b>CIA-Triade</b> (Confidentiality, Integrity, Availability).", tag:"W1"},
+  {q:"Welche 3 Datenkategorien nach Schutzbedarf gibt es?", a:"1. <b>Sachdaten</b> (Unkritisch)<br>2. <b>Personenbezogene Daten</b> (Schutzwürdig)<br>3. <b>Besonders schützenswerte Daten</b> (Sensibel)", tag:"W1"},
+  {q:"Was sind Sachdaten? Beispiele?", a:"Daten <b>ohne Personenbezug</b>.<br>Beispiele: Wetterdaten, Maschinenlaufzeiten.<br><i>Schutzbedarf: Niedrig (ausser Geschäftsgeheimnisse).</i>", tag:"W1"},
+  {q:"Was sind personenbezogene Daten?", a:"Alle Angaben, die sich auf eine <b>bestimmte oder bestimmbare Person</b> beziehen.<br>Beispiele: Name, E-Mail, IP-Adresse.<br><i>Schutzbedarf: Hoch.</i>", tag:"W1"},
+  {q:"Was sind besonders schützenswerte Daten?", a:"Daten über:<br>- <b>Gesundheit / Intimsphäre</b><br>- <b>Rasse / Ethnische Herkunft</b><br>- <b>Politische/Religiöse Ansichten</b><br>- <b>Sozialhilfe / Strafverfahren</b><br><i>Schutzbedarf: Sehr hoch.</i>", tag:"W1"},
+  {q:"CIA-Triade: Was bedeutet C?", a:"<b>Confidentiality = Vertraulichkeit</b>.<br>Nur berechtigte Personen haben Zugriff.<br><i>Gefahr: Diebstahl, Leaks.</i>", tag:"W1"},
+  {q:"CIA-Triade: Was bedeutet I?", a:"<b>Integrity = Integrität</b>.<br>Daten sind korrekt und unverändert (nicht manipuliert).<br><i>Gefahr: Manipulation, Übertragungsfehler.</i>", tag:"W1"},
+  {q:"CIA-Triade: Was bedeutet A?", a:"<b>Availability = Verfügbarkeit</b>.<br>Daten sind abrufbar, wenn sie gebraucht werden.<br><i>Gefahr: Ransomware, Serverausfall.</i>", tag:"W1"},
+  {q:"CIA-Triade: Welches Schutzziel verletzt ein Passwortdiebstahl?", a:"<b>Confidentiality</b> (Vertraulichkeit).", tag:"W1"},
+  {q:"CIA-Triade: Welches Schutzziel verletzt Ransomware primär?", a:"<b>Availability</b> (Verfügbarkeit) — die Daten sind verschlüsselt/weg.", tag:"W1"},
+  {q:"CIA-Triade: Welches Schutzziel verletzt eine Datenmanipulation?", a:"<b>Integrity</b> (Integrität).", tag:"W1"},
+  {q:"Wie funktioniert symmetrische Verschlüsselung?", a:"Es gibt nur <b>EINEN Schlüssel</b>.<br>Derselbe Schlüssel wird zum Verschlüsseln und Entschlüsseln genutzt.<br><i>Schnell, aber Schlüsseltausch ist riskant.</i>", tag:"W1"},
+  {q:"Wie funktioniert asymmetrische Verschlüsselung?", a:"Es gibt ein <b>Schlüssel-PAAR</b>.<br>1. <b>Public Key</b> (für alle, zum Verschlüsseln).<br>2. <b>Private Key</b> (geheim, nur für Empfänger, zum Entschlüsseln).<br><i>Kein riskanter Schlüsseltausch nötig.</i>", tag:"W1"},
+  {q:"Was ist der Vorteil asymmetrischer Verschlüsselung?", a:"Man muss <b>kein Geheimnis austauschen</b> — kein riskantes Senden des Schlüssels nötig.", tag:"W1"},
+  {q:"Was machen BitLocker / FileVault?", a:"<b>Full Disk Encryption (FDE)</b>.<br>Sie verschlüsseln die gesamte Festplatte.<br><i>Schutz bei Geräteverlust — ohne Passwort nur Datensalat.</i>", tag:"W1"},
+  {q:"Was macht VeraCrypt?", a:"Es erstellt <b>verschlüsselte Container (Ordner)</b>, in denen man sensible Dateien verstecken kann.", tag:"W1"},
+  // W2
+  {q:"Was versteht man unter einem Backup?", a:"<b>Zusätzliche Kopien von Daten</b> auf anderen Medien — historischer Stand.", tag:"W2"},
+  {q:"Was besagt die 3-2-1 Backup-Regel?", a:"<b>3</b> Kopien der Daten<br><b>2</b> verschiedene Medien (z.B. NAS + Cloud)<br><b>1</b> externer Ort (Offsite)", tag:"W2"},
+  {q:"Wovor schützt Redundanz (z.B. RAID)?", a:"Vor <b>Hardware-Ausfall</b>.<br><i>Festplatte kaputt → System läuft weiter.</i>", tag:"W2"},
+  {q:"Wovor schützt Redundanz NICHT?", a:"Vor <b>Ransomware, Viren oder versehentlichem Löschen</b>.<br><i>Fehler werden sofort auf die Spiegelung kopiert!</i>", tag:"W2"},
+  {q:"Backup vs. Replikation: Was ist der Unterschied?", a:"<b>Replikation:</b> Kopie an anderen Ort (schützt vor Feuer/Ausfall).<br><b>Backup:</b> Historische Kopie (schützt vor Dummheit/Viren).", tag:"W2"},
+  {q:"Was bewirkt Full Disk Encryption bei Diebstahl?", a:"Die Daten sind <b>ohne Passwort unlesbar (Datensalat)</b>, wenn das Gerät ausgeschaltet ist.", tag:"W2"},
+  {q:"Was ist ein Remote Wipe?", a:"Ein Befehl aus der Ferne, <b>das Gerät komplett zu löschen</b>.<br><i>Wird oft via MDM (Intune) bei Verlust ausgelöst.</i>", tag:"W2"},
+  {q:"Speicherort LOKAL: Vor- und Nachteile?", a:"<b>Vorteil:</b> Schnell, volle Kontrolle, kein Internet nötig.<br><b>Nachteil:</b> Risiko durch Diebstahl, Feuer, Hardware-Defekt.", tag:"W2"},
+  {q:"Speicherort CLOUD: Vor- und Nachteile?", a:"<b>Vorteil:</b> Bequem, ortsunabhängig, automatische Backups.<br><b>Nachteil:</b> Datenschutz (US-Recht/Cloud Act), Internet-Abhängigkeit.", tag:"W2"},
+  {q:"Was ist Authentifizierung (AuthN)?", a:"Die Prüfung der <b>Identität</b>.<br><i>Frage: \"Wer ist das?\" (z.B. Passwort, Ausweis)</i>", tag:"W2"},
+  {q:"Was ist Autorisierung (AuthZ)?", a:"Die Prüfung der <b>Rechte</b>.<br><i>Frage: \"Darf diese Person das?\" (z.B. Zugriff auf Ordner)</i>", tag:"W2"},
+  {q:"In welchem Verhältnis stehen AuthN und AuthZ?", a:"Man muss sich erst <b>authentifizieren</b> (Ausweis zeigen), um danach <b>autorisiert</b> zu werden (Einlass erhalten).", tag:"W2"},
+  {q:"Wie sollten Systeme Passwörter speichern?", a:"Als <b>Hashwerte (mit Salt)</b>.<br><i>Niemals im Klartext!</i>", tag:"W2"},
+  {q:"Was ist MFA?", a:"<b>Multi-Faktor-Authentifizierung</b> — Kombination aus mindestens 2 verschiedenen Kategorien:<br>1. <b>Wissen</b> (Passwort)<br>2. <b>Besitz</b> (Handy/Token)<br>3. <b>Sein</b> (Biometrie)", tag:"W2"},
+  {q:"Warum sind zwei Passwörter kein MFA?", a:"Weil beide Faktoren aus der gleichen Kategorie <b>(Wissen)</b> stammen.<br><i>MFA braucht verschiedene Kategorien, z.B. Wissen + Besitz.</i>", tag:"W2"},
+  {q:"Passkeys (FIDO2): Wie sieht der Login aus?", a:"Login per <b>FaceID/TouchID oder Geräte-PIN</b>.<br><i>Kein Passwort mehr eintippen.</i>", tag:"W2"},
+  {q:"Was ist der grösste Sicherheitsvorteil von Passkeys?", a:"Sie sind <b>Phishing-resistent</b>!<br><i>Es gibt kein Passwort, das man auf einer Fake-Seite eingeben könnte.</i>", tag:"W2"},
+  {q:"Wie werden Passkeys bei Geräteverlust wiederhergestellt?", a:"Durch <b>Synchronisation über die Cloud</b> (iCloud Keychain / Google Password Manager).", tag:"W2"},
+  {q:"Wozu dient haveibeenpwned.com?", a:"Zum Check, ob die eigene <b>E-Mail-Adresse (und Passwörter) geleakt</b> wurden.", tag:"W2"},
+  {q:"Was ist wichtiger: Länge oder Komplexität bei Passwörtern?", a:"<b>Länge schlägt Komplexität.</b><br><i>Lange Sätze sind besser als kurze Wörter mit vielen Sonderzeichen.</i>", tag:"W2"},
+  {q:"Was ist Credential Stuffing?", a:"Wenn <b>Dienst A gehackt</b> wird, werden die gestohlenen Daten bei Dienst B und C ausprobiert.<br><i>Deshalb: nie dasselbe Passwort für mehrere Dienste!</i>", tag:"W2"},
+  {q:"Was ist der Vorteil eines Passwortmanagers?", a:"Man muss sich nur noch <b>1 Master-Passwort</b> merken. Der Manager generiert und speichert unique Passwörter für jeden Dienst.", tag:"W2"},
+  {q:"[Experte] Wie funktionieren Passkeys technisch?", a:"Basis ist <b>asymmetrische Kryptografie</b>.<br><i>Private Key: Bleibt auf dem Gerät.<br>Public Key: Liegt auf dem Server.</i>", tag:"W2"},
+  {q:"[Experte] Warum sind Server-Hacks bei Passkeys harmloser?", a:"Weil auf dem Server nur die <b>Public Keys</b> liegen.<br><i>Diese sind für Angreifer nutzlos — kein Login möglich.</i>", tag:"W2"},
+  // W4
+  {q:"Was bedeutet On-Premise?", a:"<b>Server im eigenen Haus/Keller betreiben</b>.<br><i>Man kauft Hard- & Software selbst. Volle Kontrolle, aber volle Verantwortung.</i>", tag:"W4"},
+  {q:"Was ist Cloud Computing?", a:"<b>Mieten von IT-Ressourcen über das Internet</b>.<br><i>\"Der Computer eines anderen\". Monatliche Abo-Gebühr (OPEX).</i>", tag:"W4"},
+  {q:"Was bedeutet CAPEX?", a:"<b>Investitionsausgaben</b> (Capital Expenditure).<br><i>Hohe Einmalzahlung für Besitz (z.B. Server kaufen). Typisch für On-Premise.</i>", tag:"W4"},
+  {q:"Was bedeutet OPEX?", a:"<b>Betriebsausgaben</b> (Operational Expenditure).<br><i>Laufende, wiederkehrende Kosten (z.B. Abo-Gebühren). Typisch für Cloud.</i>", tag:"W4"},
+  {q:"Was ist das Shared Responsibility Model?", a:"Das Modell der <b>geteilten Verantwortung</b> in der Cloud.<br><i>Regelt, wer für welchen Teil der Sicherheit zuständig ist (Hardware, OS, Daten).</i>", tag:"W4"},
+  {q:"Was ist IaaS? Beispiel?", a:"<b>Infrastructure as a Service</b>.<br>Man mietet virtuelle Hardware (Server, Speicher).<br><i>Um das Betriebssystem muss man sich selbst kümmern (z.B. AWS EC2).</i>", tag:"W4"},
+  {q:"Was ist PaaS? Beispiel?", a:"<b>Platform as a Service</b>.<br>Man mietet eine Entwicklungsumgebung.<br><i>Keine Sorge um das Betriebssystem (z.B. Google App Engine).</i>", tag:"W4"},
+  {q:"Was ist SaaS? Beispiel?", a:"<b>Software as a Service</b>.<br>Man nutzt fertige Software im Browser.<br><i>Der Anbieter macht alles (z.B. Microsoft 365, Dropbox).</i>", tag:"W4"},
+  {q:"Wer ist bei SaaS immer für die Datenklassifizierung verantwortlich?", a:"<b>Immer der Kunde</b>.<br><i>Auch wenn Microsoft die Server betreibt: Sie bestimmen, wer Zugriff auf Ihre Daten hat.</i>", tag:"W4"},
+  {q:"Was ist der US Cloud Act?", a:"Ein US-Gesetz, das es US-Behörden erlaubt, <b>auf Daten von US-Firmen zuzugreifen</b> — auch wenn der Server in Europa steht.", tag:"W4"},
+  {q:"Was ist Vendor Lock-in?", a:"<b>Abhängigkeit von einem Cloud-Anbieter</b>.<br><i>Wenn man alle Systeme auf Azure aufbaut, ist ein Wechsel zu AWS sehr aufwändig.</i>", tag:"W4"},
+  {q:"Lernpsychologie: Was ist ein Chunk?", a:"Eine <b>zusammengefasste Bedeutungseinheit</b> im Gehirn.<br><i>Entlastet das Arbeitsgedächtnis (z.B. ein Wort statt 7 einzelne Buchstaben merken).</i>", tag:"W4"},
+  {q:"Warum fühlt sich neues Lernen anstrengend an?", a:"Weil <b>noch keine Chunks</b> vorhanden sind.<br><i>Das Arbeitsgedächtnis ist mit den vielen Einzelteilen schnell überlastet.</i>", tag:"W4"}
+];
+
+// Quiz questions
+const quizQuestions = [
+  {q:"Welches CIA-Schutzziel wird verletzt, wenn Ransomware Daten verschlüsselt?", correct:1, opts:["Confidentiality","Availability","Integrity","Authentication"]},
+  {q:"Was schützt ein RAID-System NICHT?", correct:2, opts:["Hardware-Ausfall","Festplattenausfall","Ransomware und versehentliches Löschen","Systemabsturz"]},
+  {q:"Was ist der Unterschied zwischen AuthN und AuthZ?", correct:0, opts:["AuthN = Identität prüfen, AuthZ = Rechte prüfen","AuthN = Rechte prüfen, AuthZ = Identität prüfen","Beides ist dasselbe","AuthN kommt nach AuthZ"]},
+  {q:"Warum sind Passkeys Phishing-resistent?", correct:3, opts:["Sie sind lang und komplex","Sie basieren auf symmetrischer Verschlüsselung","Sie werden täglich geändert","Es gibt kein Passwort, das eingegeben werden könnte"]},
+  {q:"Wer ist bei SaaS immer für die Datenklassifizierung zuständig?", correct:1, opts:["Der Cloud-Anbieter (Microsoft, Google etc.)","Immer der Kunde","Das ist geteilt je nach Vertrag","Niemand — das regelt die DSGVO automatisch"]},
+  {q:"Was bedeutet die 3-2-1 Backup-Regel?", correct:2, opts:["3 Server, 2 Rechenzentren, 1 Cloud","3 Backups pro Tag, 2 Medien, 1 Passwort","3 Kopien, 2 verschiedene Medien, 1 externer Ort","3 Mitarbeiter, 2 Backups, 1 Verantwortlicher"]},
+  {q:"Was unterscheidet CAPEX von OPEX?", correct:0, opts:["CAPEX = Einmalzahlung (Kauf), OPEX = laufende Kosten (Abo)","CAPEX = Abo-Modell, OPEX = Einmalkauf","Beides bedeutet laufende Kosten","CAPEX ist nur für Cloud, OPEX für On-Premise"]},
+  {q:"Bei IaaS: Wer ist für das Betriebssystem zuständig?", correct:1, opts:["Der Cloud-Anbieter","Der Kunde","Das teilen sich beide","Keiner — es ist vorkonfiguriert"]},
+  {q:"Was ist Credential Stuffing?", correct:2, opts:["Ein Angriff auf Passwort-Manager","Brute-Force eines einzigen Accounts","Gestohlene Zugangsdaten aus Hack A werden bei Dienst B verwendet","Phishing per E-Mail"]},
+  {q:"Symmetrische vs. asymmetrische Verschlüsselung: Was ist der Hauptvorteil von asymmetrisch?", correct:3, opts:["Es ist schneller","Es braucht weniger Rechenleistung","Es ist einfacher zu implementieren","Kein riskanter Schlüsselaustausch nötig"]}
+];
+
+// ── localStorage helpers ──────────────────────────────────────────
+const LS_KEY = 'modul231_v1';
+
+function loadLS() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; }
+}
+
+function saveLS(data) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
+}
+
+function getPersistedState() {
+  const d = loadLS();
+  return {
+    currentIdx:   d.currentIdx   ?? 0,
+    activeFilter: d.activeFilter ?? 'Alle',
+    cardRatings:  d.cardRatings  ?? {},   // {question: 'easy'|'hard'|'again'}
+    quizHighscore:d.quizHighscore ?? null,
+  };
+}
+
+function persistState() {
+  const d = loadLS();
+  d.currentIdx    = currentIdx;
+  d.activeFilter  = activeFilter;
+  d.cardRatings   = cardRatings;
+  d.quizHighscore = quizHighscore;
+  saveLS(d);
+}
+
+// ── State ─────────────────────────────────────────────────────────
+const ps = getPersistedState();
+let currentIdx    = ps.currentIdx;
+let activeFilter  = ps.activeFilter;
+let cardRatings   = ps.cardRatings;   // persistent per-card ratings
+let quizHighscore = ps.quizHighscore;
+let isFlipped     = false;
+let filteredCards = [];
+let quizIdx = 0, quizScore = 0, quizAnswered = false;
+
+// Derived stats from cardRatings
+function getStats() {
+  const vals = Object.values(cardRatings);
+  return {
+    seen:  vals.length,
+    easy:  vals.filter(v => v === 'easy').length,
+    again: vals.filter(v => v === 'again').length,
+    hard:  vals.filter(v => v === 'hard').length,
+  };
+}
+
+function getFilteredCards() {
+  if (activeFilter === 'Alle') return [...cards];
+  return cards.filter(c => c.tag === activeFilter);
+}
+
+function renderFilters() {
+  const tags = ['Alle', 'W1', 'W2', 'W4'];
+  const wrap = document.getElementById('filterChips');
+  wrap.innerHTML = tags.map(t => {
+    const count = t === 'Alle' ? cards.length : cards.filter(c => c.tag === t).length;
+    // count how many rated in this filter
+    const ratedInFilter = t === 'Alle'
+      ? Object.keys(cardRatings).length
+      : cards.filter(c => c.tag === t && cardRatings[c.q]).length;
+    const pct = Math.round((ratedInFilter / count) * 100);
+    return `<button class="chip ${activeFilter===t?'active':''}" onclick="setFilter('${t}')">${t === 'Alle' ? 'Alle' : t} <span style="opacity:.55">${pct}%</span></button>`;
+  }).join('');
+}
+
+function setFilter(tag) {
+  activeFilter = tag;
+  filteredCards = getFilteredCards();
+  currentIdx = 0;
+  isFlipped = false;
+  persistState();
+  renderFilters();
+  renderCard();
+  updateProgress();
+}
+
+function getRatingDot(q) {
+  const r = cardRatings[q];
+  if (!r) return '';
+  const colors = {easy:'var(--accent)', hard:'var(--accent2)', again:'var(--accent3)'};
+  return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${colors[r]};margin-left:6px;vertical-align:middle"></span>`;
+}
+
+function renderCard() {
+  const card = filteredCards[currentIdx];
+  if (!card) return;
+  document.getElementById('cardQuestion').innerHTML = card.q + getRatingDot(card.q);
+  document.getElementById('cardAnswer').innerHTML = card.a;
+  document.getElementById('cardTag').textContent = card.tag;
+  document.getElementById('cardTagBack').textContent = card.tag;
+  document.getElementById('cardCounter').textContent = `Karte ${currentIdx + 1} von ${filteredCards.length}`;
+  document.getElementById('flashcard').classList.remove('flipped');
+  isFlipped = false;
+  hideRatingBtns();
+}
+
+function flipCard() {
+  isFlipped = !isFlipped;
+  document.getElementById('flashcard').classList.toggle('flipped', isFlipped);
+  if (isFlipped) showRatingBtns();
+  else hideRatingBtns();
+  updateStats();
+}
+
+function showRatingBtns() {
+  document.querySelectorAll('.rate-btn').forEach(b => b.classList.add('visible'));
+}
+
+function hideRatingBtns() {
+  document.querySelectorAll('.rate-btn').forEach(b => b.classList.remove('visible'));
+}
+
+function rate(type) {
+  const q = filteredCards[currentIdx].q;
+  cardRatings[q] = type;
+  persistState();
+  updateStats();
+  renderCard(); // refresh dot
+  nextCard();
+}
+
+function nextCard() {
+  if (currentIdx < filteredCards.length - 1) {
+    currentIdx++;
+    persistState();
+    renderCard();
+    updateProgress();
+  }
+}
+
+function prevCard() {
+  if (currentIdx > 0) {
+    currentIdx--;
+    persistState();
+    renderCard();
+    updateProgress();
+  }
+}
+
+function shuffleCards() {
+  filteredCards = filteredCards.sort(() => Math.random() - 0.5);
+  currentIdx = 0;
+  persistState();
+  renderCard();
+}
+
+function resetProgress() {
+  if (!confirm('Fortschritt wirklich zurücksetzen?')) return;
+  cardRatings = {};
+  currentIdx = 0;
+  quizHighscore = null;
+  persistState();
+  renderFilters();
+  renderCard();
+  updateProgress();
+  updateStats();
+}
+
+function updateProgress() {
+  const pct = ((currentIdx + 1) / filteredCards.length) * 100;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = `${currentIdx + 1} / ${filteredCards.length}`;
+}
+
+function updateStats() {
+  const s = getStats();
+  const total = filteredCards.length;
+  const seenInFilter = filteredCards.filter(c => cardRatings[c.q]).length;
+  document.getElementById('statSeen').textContent = s.seen;
+  document.getElementById('statEasy').textContent = s.easy;
+  document.getElementById('statAgain').textContent = s.again;
+  document.getElementById('statHard').textContent = s.hard;
+  document.getElementById('statLeft').textContent = total - seenInFilter;
+  // highscore
+  const hs = document.getElementById('statHighscore');
+  if (hs) hs.textContent = quizHighscore !== null ? quizHighscore + '/10' : '—';
+}
+
+// ── QUIZ ──────────────────────────────────────────────────────────
+function startQuiz() {
+  quizIdx = 0; quizScore = 0; quizAnswered = false;
+  document.getElementById('quizScore').classList.remove('show');
+  renderQuizCard();
+}
+
+function renderQuizCard() {
+  const content = document.getElementById('quizContent');
+  if (quizIdx >= quizQuestions.length) {
+    content.innerHTML = '';
+    const s = document.getElementById('quizScore');
+    s.classList.add('show');
+    document.getElementById('scoreNum').textContent = quizScore + '/' + quizQuestions.length;
+    document.getElementById('scoreLabel').textContent = quizScore >= 8 ? '🟢 Sehr gut!' : quizScore >= 6 ? '🟡 Gut — nochmal üben' : '🔴 Mehr lernen nötig';
+    // save highscore
+    if (quizHighscore === null || quizScore > quizHighscore) {
+      quizHighscore = quizScore;
+      persistState();
+      updateStats();
+      if (quizScore > (quizHighscore || 0)) document.getElementById('scoreLabel').textContent += ' 🏆 Neuer Highscore!';
+    }
+    return;
+  }
+  const q = quizQuestions[quizIdx];
+  content.innerHTML = `
+    <div class="quiz-card">
+      <div class="quiz-q">${quizIdx+1}. ${q.q}</div>
+      <div class="quiz-options">
+        ${q.opts.map((o,i) => `<button class="quiz-opt" onclick="answerQuiz(${i})">${o}</button>`).join('')}
+      </div>
+      <div class="quiz-feedback" id="quizFeedback"></div>
+    </div>
+    <div style="text-align:right">
+      <button class="btn next" id="nextQuizBtn" onclick="nextQuiz()" style="display:none">Weiter →</button>
+    </div>
+  `;
+}
+
+function answerQuiz(chosen) {
+  if (quizAnswered) return;
+  quizAnswered = true;
+  const q = quizQuestions[quizIdx];
+  const opts = document.querySelectorAll('.quiz-opt');
+  opts.forEach(o => o.classList.add('disabled'));
+  opts[q.correct].classList.add('correct');
+  const fb = document.getElementById('quizFeedback');
+  if (chosen === q.correct) {
+    quizScore++;
+    opts[chosen].classList.add('correct');
+    fb.textContent = '✓ Richtig!';
+    fb.className = 'quiz-feedback show ok';
+  } else {
+    opts[chosen].classList.add('wrong');
+    fb.textContent = `✗ Falsch. Richtig: ${q.opts[q.correct]}`;
+    fb.className = 'quiz-feedback show fail';
+  }
+  document.getElementById('nextQuizBtn').style.display = 'inline-block';
+}
+
+function nextQuiz() {
+  quizIdx++;
+  quizAnswered = false;
+  renderQuizCard();
+}
+
+// CHEAT SHEET
+const cheatSections = [
+  {
+    week: 'W1', title: 'Datenschutz & Datensicherheit + CIA-Triade',
+    cards: [
+      {h:'Datenschutz vs. Datensicherheit', body:`
+        <ul>
+          <li><strong>Datenschutz:</strong> Schützt die Persönlichkeit von Menschen. Basis: DSG.<br><em>Frage: "Darf ich diese Daten bearbeiten?"</em></li>
+          <li><strong>Datensicherheit:</strong> Schützt Daten technisch vor Verlust/Zugriff. Basis: CIA-Triade.<br><em>Frage: "Sind die Daten technisch sicher?"</em></li>
+        </ul>
+      `},
+      {h:'Datenkategorien', body:`
+        <ul>
+          <li><span class="badge badge-green">Niedrig</span> <strong>Sachdaten:</strong> Wetterdaten, Maschinenlaufzeiten</li>
+          <li><span class="badge badge-yellow">Hoch</span> <strong>Personenbezogen:</strong> Name, E-Mail, IP-Adresse</li>
+          <li><span class="badge badge-red">Sehr hoch</span> <strong>Besonders schützenswert:</strong> Gesundheit, Rasse, Religion, Sozialhilfe</li>
+        </ul>
+      `},
+      {h:'CIA-Triade', body:`
+        <ul>
+          <li>🛡️ <strong>Confidentiality</strong> — Nur Berechtigte haben Zugriff. <em>(Gefahr: Leaks)</em></li>
+          <li>✅ <strong>Integrity</strong> — Daten sind korrekt & unverändert. <em>(Gefahr: Manipulation)</em></li>
+          <li>⚡ <strong>Availability</strong> — Daten abrufbar wenn nötig. <em>(Gefahr: Ransomware)</em></li>
+        </ul>
+      `},
+      {h:'Verschlüsselung', body:`
+        <ul>
+          <li><strong>Symmetrisch:</strong> 1 Schlüssel — schnell, aber riskanter Austausch</li>
+          <li><strong>Asymmetrisch:</strong> Public Key (alle) + Private Key (nur Empfänger) — kein Schlüsselaustausch nötig</li>
+          <li><strong>BitLocker/FileVault:</strong> Full Disk Encryption</li>
+          <li><strong>VeraCrypt:</strong> Verschlüsselte Container</li>
+        </ul>
+      `}
+    ]
+  },
+  {
+    week: 'W2', title: 'Backup, Authentifizierung & Passkeys',
+    cards: [
+      {h:'Backup-Konzepte', body:`
+        <ul>
+          <li><strong>3-2-1 Regel:</strong> 3 Kopien, 2 Medien, 1 externer Ort</li>
+          <li><strong>RAID/Redundanz:</strong> Schutz vor Hardware-Ausfall — NICHT vor Ransomware!</li>
+          <li><strong>Replikation:</strong> Kopie an anderen Ort (schützt vor Feuer)</li>
+          <li><strong>Backup:</strong> Historische Kopie — schützt vor Viren & Dummheit</li>
+        </ul>
+        <div class="warn-box">⚠️ Cloud-Sync (OneDrive/Dropbox) ≠ Backup! Ransomware wird sofort synchronisiert.</div>
+      `},
+      {h:'AuthN vs. AuthZ', body:`
+        <ul>
+          <li>🆔 <strong>Authentifizierung (AuthN):</strong> "Wer bist du?" — Identität prüfen</li>
+          <li>🎟️ <strong>Autorisierung (AuthZ):</strong> "Was darfst du?" — Rechte prüfen</li>
+          <li>Reihenfolge: erst AuthN → dann AuthZ</li>
+        </ul>
+      `},
+      {h:'MFA & Passwort-Hygiene', body:`
+        <ul>
+          <li><strong>MFA-Kategorien:</strong> Wissen + Besitz + Sein (mind. 2 verschiedene!)</li>
+          <li>2× Passwort = kein MFA (nur 1 Kategorie)</li>
+          <li><strong>Länge > Komplexität</strong> bei Passwörtern</li>
+          <li>Nie gleiche Passwörter → Credential Stuffing Risiko</li>
+          <li>Tool: Passwortmanager</li>
+        </ul>
+      `},
+      {h:'Passkeys (FIDO2)', body:`
+        <ul>
+          <li>Login per FaceID/TouchID — kein Passwort</li>
+          <li><strong>Phishing-resistent</strong> — es gibt kein Passwort zum Stehlen</li>
+          <li>Technisch: Asymmetrische Kryptografie (Private Key bleibt auf Gerät)</li>
+          <li>Wiederherstellung via iCloud/Google Keychain</li>
+        </ul>
+      `}
+    ]
+  },
+  {
+    week: 'W4', title: 'Cloud, On-Premise & Shared Responsibility',
+    cards: [
+      {h:'On-Premise vs. Cloud', body:`
+        <ul>
+          <li>🏠 <strong>On-Premise:</strong> Eigene Hardware, volle Kontrolle, CAPEX (Einmalkauf)</li>
+          <li>☁️ <strong>Cloud:</strong> Gemietet, skalierbar, OPEX (Abo) — aber Datenschutzfragen</li>
+          <li><strong>Vendor Lock-in:</strong> Gefahr der Abhängigkeit vom Anbieter</li>
+        </ul>
+      `},
+      {h:'Cloud-Modelle (XaaS)', body:`
+        <ul>
+          <li><strong>IaaS:</strong> Virtuelle Hardware (AWS EC2) — OS selbst patchen</li>
+          <li><strong>PaaS:</strong> Entwicklungsumgebung (Google App Engine) — kein OS-Management</li>
+          <li><strong>SaaS:</strong> Fertige Software (M365, Dropbox) — Anbieter macht alles</li>
+        </ul>
+        <div class="warn-box">⚠️ Datenklassifizierung & Zugriffsrechte: IMMER der Kunde, egal welches Modell!</div>
+      `},
+      {h:'Rechtliches & Standort', body:`
+        <ul>
+          <li><strong>CH/EU:</strong> Hohes Datenschutzniveau (DSG/DSGVO)</li>
+          <li><strong>US Cloud Act:</strong> US-Behörden können auf Daten zugreifen — auch bei Servern in Europa</li>
+          <li><strong>SCC:</strong> Standard Contractual Clauses — vertragliche Absicherung, aber umstritten</li>
+        </ul>
+        <div class="warn-box">⚠️ Besonders schützenswerte Daten → Vorsicht bei US-Cloud-Anbietern!</div>
+      `},
+      {h:'Cloud ≠ Backup', body:`
+        <ul>
+          <li><strong>OneDrive/Dropbox Sync</strong> = Synchronisation — kein echtes Backup!</li>
+          <li>Ransomware auf Laptop → wird sofort in die Cloud synchronisiert</li>
+          <li><strong>Cloud-Backup</strong> = separater Dienst mit Versionierung (Immutable)</li>
+        </ul>
+      `}
+    ]
+  }
+];
+
+function renderCheatsheet() {
+  const wrap = document.getElementById('cheatsheetContent');
+  wrap.innerHTML = cheatSections.map((sec, si) => `
+    <div class="cs-section" id="cs-${si}">
+      <div class="cs-header" onclick="toggleSection(${si})">
+        <span class="cs-week">${sec.week}</span>
+        <span class="cs-title">${sec.title}</span>
+        <span class="cs-chevron">▼</span>
+      </div>
+      <div class="cs-body">
+        <div class="cs-grid">
+          ${sec.cards.map(c => `
+            <div class="cs-card">
+              <h4>${c.h}</h4>
+              ${c.body}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleSection(i) {
+  document.getElementById('cs-' + i).classList.toggle('open');
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['flashcard','quiz','cheatsheet'][i] === tab));
+  document.getElementById('flashcard-view').style.display = tab === 'flashcard' ? 'block' : 'none';
+  document.getElementById('quiz-view').style.display = tab === 'quiz' ? 'block' : 'none';
+  document.getElementById('cheatsheet-view').style.display = tab === 'cheatsheet' ? 'block' : 'none';
+  if (tab === 'quiz') startQuiz();
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  const fv = document.getElementById('flashcard-view');
+  if (fv.style.display === 'none') return;
+  if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); flipCard(); }
+  else if (e.key === 'ArrowRight') nextCard();
+  else if (e.key === 'ArrowLeft') prevCard();
+  else if (e.key === '1' && isFlipped) rate('easy');
+  else if (e.key === '2' && isFlipped) rate('again');
+  else if (e.key === '3' && isFlipped) rate('hard');
+});
+
+// Init
+filteredCards = getFilteredCards();
+// clamp currentIdx in case card count changed
+if (currentIdx >= filteredCards.length) currentIdx = 0;
+renderFilters();
+renderCard();
+updateProgress();
+updateStats();
+renderCheatsheet();
+</script>
+</body>
+</html>
